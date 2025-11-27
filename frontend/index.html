@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Price Calculator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            width: 100%;
+            max-width: 450px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 1.8rem;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e1e1;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            font-family: inherit;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+
+        input::placeholder, textarea::placeholder {
+            color: #aaa;
+        }
+
+        textarea {
+            resize: none;
+            height: 50px;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+            border-radius: 12px;
+            text-align: center;
+            display: none;
+        }
+
+        .result.show {
+            display: block;
+            animation: fadeIn 0.4s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+
+        .result-value {
+            color: #333;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .result-value .currency {
+            font-size: 1.2rem;
+            color: #667eea;
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        .input-hint {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .paste-section {
+            background: linear-gradient(135deg, #e8f4fd 0%, #d4e8f7 100%);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            border: 2px dashed #667eea;
+        }
+
+        .paste-section label {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #ddd;
+        }
+
+        .divider span {
+            padding: 0 15px;
+        }
+
+        .success-flash {
+            animation: flash 0.5s ease;
+        }
+
+        @keyframes flash {
+            0%, 100% { background-color: white; }
+            50% { background-color: #d4edda; }
+        }
+
+        .tier-info {
+            margin-top: 24px;
+        }
+
+        .tier-info details {
+            background: #f8f9fa;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .tier-info summary {
+            padding: 14px 18px;
+            cursor: pointer;
+            font-weight: 600;
+            color: #555;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        .tier-info summary:hover {
+            background: #eef0f2;
+        }
+
+        .tier-info summary::before {
+            content: '▶';
+            font-size: 0.7rem;
+            transition: transform 0.2s;
+        }
+
+        .tier-info details[open] summary::before {
+            transform: rotate(90deg);
+        }
+
+        .tier-info summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .tier-content {
+            padding: 0 18px 18px;
+        }
+
+        .tier-section {
+            margin-bottom: 16px;
+        }
+
+        .tier-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .tier-section h4 {
+            color: #667eea;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .tier-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .tier-table th,
+        .tier-table td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .tier-table th {
+            background: #e9ecef;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .tier-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .tier-table td:first-child {
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .tier-note {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 12px;
+            padding: 10px;
+            background: #fff;
+            border-radius: 6px;
+            border-left: 3px solid #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Price Calculator</h1>
+
+        <div class="paste-section">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="pasteInput">Paste from Excel</label>
+                <textarea id="pasteInput" placeholder="Paste: L  B  H  W  Price (tab-separated)"></textarea>
+                <div class="input-hint">Format: Length, Breadth, Height, Weight, Factory Price</div>
+            </div>
+        </div>
+
+        <div class="divider"><span>or enter manually</span></div>
+
+        <form id="priceForm">
+            <div class="form-group">
+                <label for="length">Length</label>
+                <input type="number" id="length" name="length" step="0.01" min="0" placeholder="Enter length" required>
+                <div class="input-hint">in inches</div>
+            </div>
+
+            <div class="form-group">
+                <label for="breadth">Breadth</label>
+                <input type="number" id="breadth" name="breadth" step="0.01" min="0" placeholder="Enter breadth" required>
+                <div class="input-hint">in inches</div>
+            </div>
+
+            <div class="form-group">
+                <label for="height">Height</label>
+                <input type="number" id="height" name="height" step="0.01" min="0" placeholder="Enter height" required>
+                <div class="input-hint">in inches</div>
+            </div>
+
+            <div class="form-group">
+                <label for="weight">Weight</label>
+                <input type="number" id="weight" name="weight" step="0.01" min="0" placeholder="Enter weight" required>
+                <div class="input-hint">in lbs</div>
+            </div>
+
+            <div class="form-group">
+                <label for="factory_price">Factory Price</label>
+                <input type="number" id="factory_price" name="factory_price" step="0.01" min="0" placeholder="Enter factory price" required>
+                <div class="input-hint">in INR</div>
+            </div>
+
+            <div class="form-group">
+                <label for="duty_rate">Duty Rate</label>
+                <input type="number" id="duty_rate" name="duty_rate" step="0.1" min="0" max="100" value="15" placeholder="Enter duty rate">
+                <div class="input-hint">in % (default: 15%)</div>
+            </div>
+
+            <button type="submit" id="submitBtn">Calculate Price</button>
+        </form>
+
+        <div class="result" id="result">
+            <div class="result-label">Approx List Price</div>
+            <div class="result-value"><span class="currency">$</span><span id="priceValue">0.00</span></div>
+        </div>
+
+        <div class="error" id="error"></div>
+
+        <div class="tier-info">
+            <details>
+                <summary>How Shipping Tiers Work</summary>
+                <div class="tier-content">
+                    <div class="tier-section">
+                        <h4>Small Standard</h4>
+                        <table class="tier-table">
+                            <tr><th>Criteria</th><th>Requirement</th></tr>
+                            <tr><td>Weight</td><td>&lt; 1 lb</td></tr>
+                            <tr><td>Longest Side</td><td>&lt; 15 in</td></tr>
+                            <tr><td>Median Side</td><td>&lt; 0.12 in</td></tr>
+                            <tr><td>Shortest Side</td><td>&lt; 0.75 in</td></tr>
+                        </table>
+                    </div>
+
+                    <div class="tier-section">
+                        <h4>Large Standard</h4>
+                        <table class="tier-table">
+                            <tr><th>Criteria</th><th>Requirement</th></tr>
+                            <tr><td>Weight</td><td>1 - 19 lbs</td></tr>
+                            <tr><td>Longest Side</td><td>15 - 17 in</td></tr>
+                            <tr><td>Median Side</td><td>0.12 - 13 in</td></tr>
+                            <tr><td>Shortest Side</td><td>0.75 - 7 in</td></tr>
+                        </table>
+                    </div>
+
+                    <div class="tier-section">
+                        <h4>Small Oversize</h4>
+                        <table class="tier-table">
+                            <tr><th>Criteria</th><th>Requirement</th></tr>
+                            <tr><td>Weight</td><td>20 - 49 lbs</td></tr>
+                            <tr><td>Longest Side</td><td>18 - 58 in</td></tr>
+                            <tr><td>Median Side</td><td>14 - 32 in</td></tr>
+                            <tr><td>Shortest Side</td><td>8 - 32 in</td></tr>
+                        </table>
+                    </div>
+
+                    <div class="tier-section">
+                        <h4>Medium Oversize</h4>
+                        <table class="tier-table">
+                            <tr><th>Criteria</th><th>Requirement</th></tr>
+                            <tr><td>Weight</td><td>50 - 69 lbs</td></tr>
+                        </table>
+                    </div>
+
+                    <div class="tier-section">
+                        <h4>Large Oversize</h4>
+                        <table class="tier-table">
+                            <tr><th>Criteria</th><th>Requirement</th></tr>
+                            <tr><td>Weight</td><td>70 - 149 lbs</td></tr>
+                            <tr><td>Longest Side</td><td>59+ in</td></tr>
+                            <tr><td>Median Side</td><td>33+ in</td></tr>
+                            <tr><td>Shortest Side</td><td>33+ in</td></tr>
+                        </table>
+                    </div>
+
+                    <div class="tier-section">
+                        <h4>Special Oversize</h4>
+                        <table class="tier-table">
+                            <tr><th>Criteria</th><th>Requirement</th></tr>
+                            <tr><td>Weight</td><td>150+ lbs</td></tr>
+                        </table>
+                    </div>
+
+                    <div class="tier-note">
+                        <strong>How it works:</strong> Your product is assigned to the <em>highest</em> tier that any single measurement qualifies for. Shipping weight = max(actual weight, dimensional weight). Dimensional weight = (L x B x H) / 139.
+                    </div>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <script>
+        // Supabase Edge Function URL
+        const API_URL = "https://ptmhhbdtyffqfexpfxps.supabase.co/functions/v1/price-calculator";
+
+        const form = document.getElementById('priceForm');
+        const resultDiv = document.getElementById('result');
+        const priceValue = document.getElementById('priceValue');
+        const errorDiv = document.getElementById('error');
+        const submitBtn = document.getElementById('submitBtn');
+        const pasteInput = document.getElementById('pasteInput');
+
+        const lengthInput = document.getElementById('length');
+        const breadthInput = document.getElementById('breadth');
+        const heightInput = document.getElementById('height');
+        const weightInput = document.getElementById('weight');
+        const factoryPriceInput = document.getElementById('factory_price');
+        const dutyRateInput = document.getElementById('duty_rate');
+
+        // Handle paste from Excel
+        pasteInput.addEventListener('input', (e) => {
+            const value = e.target.value.trim();
+            if (!value) return;
+
+            // Split by tabs or multiple spaces (common in Excel paste)
+            const parts = value.split(/\t+|\s{2,}/);
+
+            if (parts.length >= 5) {
+                const nums = parts.map(p => parseFloat(p.trim())).filter(n => !isNaN(n));
+
+                if (nums.length >= 5) {
+                    lengthInput.value = nums[0];
+                    breadthInput.value = nums[1];
+                    heightInput.value = nums[2];
+                    weightInput.value = nums[3];
+                    factoryPriceInput.value = nums[4];
+
+                    // Visual feedback
+                    [lengthInput, breadthInput, heightInput, weightInput, factoryPriceInput].forEach(input => {
+                        input.classList.add('success-flash');
+                        setTimeout(() => input.classList.remove('success-flash'), 500);
+                    });
+
+                    // Clear paste input
+                    pasteInput.value = '';
+
+                    // Automatically trigger calculation
+                    form.dispatchEvent(new Event('submit'));
+                }
+            }
+        });
+
+        // Handle form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Reset displays
+            resultDiv.classList.remove('show');
+            errorDiv.classList.remove('show');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Calculating...';
+
+            // Prepare data
+            const data = {
+                length_in: parseFloat(lengthInput.value),
+                breadth_in: parseFloat(breadthInput.value),
+                height_in: parseFloat(heightInput.value),
+                weight_lb: parseFloat(weightInput.value),
+                factory_inr: parseFloat(factoryPriceInput.value),
+                duty_rate_percent: parseFloat(dutyRateInput.value)
+            };
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Calculation failed. Please check your inputs.');
+                }
+
+                const result = await response.json();
+                if (typeof result.theoretical_listing_price !== 'number' || isNaN(result.theoretical_listing_price)) {
+                    throw new Error('Invalid response from server.');
+                }
+
+                // Display result
+                priceValue.textContent = result.theoretical_listing_price.toFixed(2);
+                resultDiv.classList.add('show');
+            } catch (error) {
+                errorDiv.textContent = error.message || 'Something went wrong. Please try again.';
+                errorDiv.classList.add('show');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Calculate Price';
+            }
+        });
+    </script>
+</body>
+</html>

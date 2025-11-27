@@ -1,0 +1,2 @@
+[function.price-calculator]
+verify_jwt = false
