@@ -1,26 +1,36 @@
 # Price Calculator
 
-A complete full-stack price calculator application with a Supabase Edge Function backend and static frontend suitable for GitHub Pages.
+A full-stack price calculator application for Amazon FBA products with a Supabase Edge Function backend and static frontend hosted on GitHub Pages.
 
 ## Overview
 
-This project consists of:
-- **Backend**: Supabase Edge Function (Deno/TypeScript) that handles all pricing calculations server-side
-- **Frontend**: Static HTML page with inline CSS and JavaScript that can be hosted on GitHub Pages
+This project calculates theoretical listing prices for Amazon FBA products based on:
+- Product dimensions (length, breadth, height in inches)
+- Weight (in pounds)
+- Factory price (in Indian Rupees)
+- Customizable duty rate (default 15%)
 
-**Important**: All business logic is kept server-side. The frontend only sends inputs and displays the final calculated price.
+The calculator displays:
+1. **Approx List Price** - The theoretical selling price on Amazon
+2. **Last Mile Shipping Fees** - The FBA fulfillment fees
+
+**Important**: All business logic is kept server-side to protect proprietary pricing formulas.
 
 ## Project Structure
 
 ```
 price-calculator/
 ├── README.md
-├── frontend/
-│   └── index.html          # Static frontend (ready for GitHub Pages)
-└── supabase/
-    └── functions/
-        └── price-calculator/
-            └── index.ts    # Edge Function with pricing logic
+├── index.html                    # Main frontend file
+├── docs/
+│   └── index.html                # GitHub Pages deployment (copy of main index.html)
+├── supabase/
+│   └── functions/
+│       └── price-calculator/
+│           ├── index.ts          # Edge Function with pricing logic
+│           └── config.toml       # Function configuration (JWT disabled)
+├── test-calculation.js           # Local testing script
+└── .env                          # Environment variables (not committed)
 ```
 
 ## Prerequisites
@@ -28,244 +38,229 @@ price-calculator/
 - [Supabase CLI](https://supabase.com/docs/guides/cli) installed
 - A [Supabase account](https://supabase.com) (free tier works fine)
 - A GitHub account (for hosting the frontend)
+- Node.js (for local testing)
 
-## Part 1: Deploy the Supabase Edge Function
+## Backend: Supabase Edge Function
 
-### Step 1: Install Supabase CLI (if needed)
+### Pricing Formula
 
-```bash
-npm install -g supabase
+The Edge Function calculates prices using these components:
+
+#### Constants
+```typescript
+USD_PER_INR = 85.0              // Currency conversion rate
+SEND_RATE_PER_CFT = 7.0         // International shipping per cubic foot
+LOCAL_MARKUP = 0.05              // 5% local markup
+DEFAULT_DUTY_RATE = 0.15         // 15% duty (customizable by user)
+
+AA = 0.15                        // Returns (15%)
+AB = (1-AA) * 0.15 + 0.03 * AA  // Selling fees (~13.2%)
+AC = 0.25                        // Advertising (25%)
+AD = 0.15                        // Operating margin (15%)
+AF = 1 - (AA + AB + AC + AD)    // Net percentage (~41.55%)
 ```
 
-Or use other installation methods from the [Supabase CLI docs](https://supabase.com/docs/guides/cli/getting-started).
+#### Calculation Steps
 
-### Step 2: Login to Supabase
+1. **Shipping Costs**:
+   - Calculate cubic feet: `(L × B × H) / 1728`
+   - International shipping: `CFT × $7.00`
 
-```bash
-supabase login
+2. **Landed Cost**:
+   - Factory cost in USD: `Factory INR / 85.0`
+   - Duty: `(Factory USD × 1.05) × duty_rate`
+   - Landed: `Factory USD + Shipping + Duty`
+
+3. **FBA Fees** (based on shipping weight and tier):
+   - Dimensional weight: `⌈(L × B × H) / 139⌉`
+   - Shipping weight: `max(actual weight, dimensional weight)`
+   - Tier determination: Based on weight and dimensions
+   - FBA fee: `base + increment × max(0, weight - cutoff)`
+
+4. **Final Price**:
+   ```
+   List Price = (Landed Cost + FBA Fees) / 0.4155
+   ```
+
+#### FBA Shipping Tiers
+
+| Tier | Weight Range | Base | Increment | Cutoff |
+|------|-------------|------|-----------|--------|
+| Small Standard | < 1 lb | $7.46 | $0.32 | 3 lbs |
+| Large Standard | 1-19 lbs | $10.65 | $0.38 | 1 lb |
+| Small Oversize | 20-49 lbs | $26.33 | $0.38 | 1 lb |
+| Medium Oversize | 50-69 lbs | $40.12 | $0.75 | 51 lbs |
+| Large Oversize | 70-149 lbs | $54.81 | $0.75 | 71 lbs |
+| Special Oversize | 150+ lbs | $194.95 | $0.19 | 151 lbs |
+
+### API Specification
+
+#### Endpoint
+```
+POST https://{PROJECT_REF}.supabase.co/functions/v1/price-calculator
 ```
 
-This will open your browser to authenticate.
-
-### Step 3: Link to your Supabase project
-
-If you haven't created a project yet:
-1. Go to [https://supabase.com/dashboard](https://supabase.com/dashboard)
-2. Click "New Project"
-3. Fill in the project details and create it
-
-Then link your local project:
-
-```bash
-# Navigate to the project directory
-cd price-calculator
-
-# Link to your Supabase project
-supabase link --project-ref YOUR_PROJECT_REF
+#### Request Body
+```json
+{
+  "length_in": 14.0,
+  "breadth_in": 14.0,
+  "height_in": 26.0,
+  "weight_lb": 11.9,
+  "factory_inr": 1250,
+  "duty_rate_percent": 15
+}
 ```
 
-Replace `YOUR_PROJECT_REF` with your actual project reference ID (found in your project settings).
-
-**Alternatively**, if you want to initialize Supabase locally first:
-
-```bash
-cd price-calculator
-supabase init
-supabase link --project-ref YOUR_PROJECT_REF
+#### Response
+```json
+{
+  "theoretical_listing_price": 194.95,
+  "fba_fees": 24.33
+}
 ```
 
-### Step 4: Deploy the Edge Function
+#### Error Response
+```json
+{
+  "error": "Invalid input or server error"
+}
+```
+
+### Deployment
+
+#### 1. Deploy to Supabase
 
 ```bash
+# Deploy with project reference
+supabase functions deploy price-calculator --project-ref YOUR_PROJECT_REF --no-verify-jwt
+
+# Or if linked to project
 supabase functions deploy price-calculator
 ```
 
-After deployment, you'll see output like:
-
-```
-Deployed Function price-calculator on project YOUR_PROJECT_REF
-...
-```
-
-### Step 5: Get your Function URL
-
-Your function URL will be:
-
-```
-https://YOUR_PROJECT_REF.supabase.co/functions/v1/price-calculator
-```
-
-You can also find it in your Supabase Dashboard:
-1. Go to your project dashboard
-2. Navigate to **Edge Functions** in the sidebar
-3. Click on **price-calculator**
-4. Copy the function URL
-
-### Step 6: Test the Function (Optional)
-
-You can test the function using curl:
+#### 2. Test the Deployment
 
 ```bash
-curl -X POST https://YOUR_PROJECT_REF.supabase.co/functions/v1/price-calculator \
+curl -X POST "https://YOUR_PROJECT_REF.supabase.co/functions/v1/price-calculator" \
   -H "Content-Type: application/json" \
   -d '{
-    "length_in": 10,
-    "breadth_in": 8,
-    "height_in": 6,
-    "weight_lb": 5,
-    "factory_inr": 1000
+    "length_in": 14.0,
+    "breadth_in": 14.0,
+    "height_in": 26.0,
+    "weight_lb": 11.9,
+    "factory_inr": 1250,
+    "duty_rate_percent": 15
   }'
 ```
 
-You should get a response like:
-
+Expected response:
 ```json
-{"theoretical_listing_price": 45.67}
+{"theoretical_listing_price": 194.95, "fba_fees": 24.33}
 ```
 
-## Part 2: Deploy the Frontend to GitHub Pages
+## Frontend: GitHub Pages
 
-### Step 1: Update the API URL
+### Features
 
-1. Open `frontend/index.html`
-2. Find the line near the top of the `<script>` section:
-   ```javascript
-   const API_URL = "https://YOUR_PROJECT_REF.supabase.co/functions/v1/price-calculator";
-   ```
-3. Replace `YOUR_PROJECT_REF` with your actual Supabase project reference ID
+1. **Manual Input**: Enter values in individual form fields
+2. **Excel Paste**: Copy 5 tab-separated values (L, B, H, W, Price) and paste
+3. **Customizable Duty Rate**: Adjust duty percentage (default 15%)
+4. **Real-time Calculation**: Automatic calculation on paste
+5. **Results Display**:
+   - Approx List Price (larger display)
+   - Last Mile Shipping Fees (FBA fees)
+6. **Shipping Tier Reference**: Collapsible details about FBA tiers
 
-### Step 2: Create a GitHub Repository
+### Configuration
 
-1. Go to [GitHub](https://github.com) and create a new repository
-   - Name it whatever you like (e.g., `price-calculator`)
-   - Make it public (required for free GitHub Pages)
-   - Don't initialize with README (we already have files)
+The API URL is set in `index.html`:
+```javascript
+const API_URL = "https://ptmhhbdtyffqfexpfxps.supabase.co/functions/v1/price-calculator";
+```
 
-### Step 3: Push Frontend Files to GitHub
+Update this to match your Supabase project reference.
 
-You have two options:
+### Deployment
 
-#### Option A: Frontend files at repository root (simplest)
+#### Current Setup
+- **Repository**: `jay-trivedi/price-calculator`
+- **GitHub Pages**: Serves from `/docs` folder on `main` branch
+- **Live URL**: https://jay-trivedi.github.io/price-calculator/
+
+#### Deploy Updates
 
 ```bash
-# Create a new git repository in the frontend folder
-cd frontend
-git init
-git add index.html
-git commit -m "Initial commit"
+# 1. Update index.html with changes
+# 2. Copy to docs folder
+cp index.html docs/index.html
 
-# Add your GitHub repository as remote
-git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+# 3. Commit and push
+git add index.html docs/index.html
+git commit -m "Update frontend"
+git push origin main
 
-# Push to GitHub
-git branch -M main
-git push -u origin main
+# GitHub Pages will auto-deploy in 1-2 minutes
 ```
 
-#### Option B: Whole project in repository (if you want to keep backend code too)
+## Local Testing
+
+### Test Script
+
+Run local calculations without deploying:
 
 ```bash
-# Create a new git repository in the project root
-cd price-calculator
-git init
-git add .
-git commit -m "Initial commit"
-
-# Add your GitHub repository as remote
-git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
-
-# Push to GitHub
-git branch -M main
-git push -u origin main
+node test-calculation.js
 ```
 
-If using Option B, you'll need to configure GitHub Pages to use the `frontend` folder.
-
-### Step 4: Enable GitHub Pages
-
-1. Go to your repository on GitHub
-2. Click **Settings**
-3. Scroll down to **Pages** in the left sidebar
-4. Under **Source**, select:
-   - **Option A users**: Branch: `main`, Folder: `/ (root)`
-   - **Option B users**: Branch: `main`, Folder: `/frontend`
-5. Click **Save**
-
-### Step 5: Access Your Site
-
-After a few minutes, your site will be available at:
-
+This uses the same calculation logic as the backend and outputs:
 ```
-https://YOUR_USERNAME.github.io/YOUR_REPO_NAME/
+=== Price Calculator Test ===
+
+Input:
+  Length: 14 in
+  Breadth: 14 in
+  Height: 26 in
+  Weight: 11.9 lbs
+  Factory Price: ₹1250
+  Duty Rate: 15%
+
+Results:
+  Approx List Price: $194.95
+  Last Mile Shipping Fees (FBA): $24.33
 ```
 
-(If Option A, the URL is as above. If Option B and you selected `/frontend`, it will be the same.)
+### Test Cases
 
-GitHub will show you the exact URL in the Pages settings.
+| L (in) | B (in) | H (in) | Weight (lbs) | Factory (INR) | List Price | FBA Fees |
+|--------|--------|--------|--------------|---------------|------------|----------|
+| 14.0 | 14.0 | 26.0 | 11.9 | 1250 | $194.95 | $24.33 |
+| 14.5 | 14.5 | 26.5 | 19.0 | 1450 | $214.36 | $25.85 |
+| 14.5 | 15.0 | 5.5 | 7.7 | 1150 | $107.54 | $13.69 |
 
 ## Usage
 
-### Manual Input
+### Manual Entry
+1. Enter dimensions (L, B, H in inches)
+2. Enter weight (pounds)
+3. Enter factory price (INR)
+4. Optionally adjust duty rate (default 15%)
+5. Click "Calculate Price"
+6. View list price and FBA fees
 
-1. Enter product dimensions (length, breadth, height in inches)
-2. Enter weight in pounds
-3. Enter factory price in Indian Rupees (INR)
-4. Click "Calculate Price"
-5. View the theoretical listing price in USD
+### Excel Paste
+1. In Excel, select 5 cells: `L | B | H | W | Price`
+2. Copy (Ctrl+C / Cmd+C)
+3. Click the "Paste from Excel" text area
+4. Paste (Ctrl+V / Cmd+V)
+5. Calculator auto-populates and calculates
 
-### Paste from Excel
-
-1. In Excel, select 5 cells in a row: Length, Breadth, Height, Weight, Factory Price
-2. Copy (Ctrl+C or Cmd+C)
-3. Click in the "Paste from Excel" text area
-4. Paste (Ctrl+V or Cmd+V)
-5. The calculator will automatically populate fields and calculate
-
-## How It Works
-
-### Backend (Edge Function)
-
-The Edge Function receives product dimensions, weight, and factory price, then:
-
-1. Calculates shipping costs based on dimensional weight and FBA tier
-2. Applies currency conversion (INR to USD)
-3. Factors in duties, markup, returns, fees, ads, and operating margin
-4. Returns the theoretical listing price
-
-**All pricing logic is kept server-side** to protect business formulas.
-
-### Frontend
-
-The frontend:
-- Collects user input
-- Sends data to the Supabase Edge Function via POST request
-- Displays only the final calculated price
-- Never exposes or hints at the pricing formula
-
-## Pricing Formula Details
-
-The server uses these calculations (kept private from the client):
-
-- **Currency conversion**: INR to USD at 85.0 rate
-- **Shipping**: Based on dimensional weight and FBA tier system
-- **Costs included**:
-  - Factory cost (ex-works)
-  - International shipping (per cubic foot)
-  - Duties (25% of landed value)
-  - FBA fees (tier-based)
-  - Returns (15%)
-  - Selling fees (~15%)
-  - Advertising (25%)
-  - Operating margin (15%)
-
-## Security Notes
-
-- The Edge Function has CORS enabled for all origins (`*`)
-- **Before production**: Update CORS headers in `supabase/functions/price-calculator/index.ts` to only allow your domain:
-  ```typescript
-  "Access-Control-Allow-Origin": "https://YOUR_USERNAME.github.io"
-  ```
-- Consider adding authentication if needed
+Example Excel data:
+```
+14.0    14.0    26.0    11.9    1250
+14.5    14.5    26.5    19.0    1450
+14.5    15.0    5.5     7.7     1150
+```
 
 ## Customization
 
@@ -274,52 +269,172 @@ The server uses these calculations (kept private from the client):
 Edit `supabase/functions/price-calculator/index.ts`:
 
 ```typescript
-const USD_PER_INR = 85.0;          // Currency rate
-const SEND_RATE_PER_CFT = 7.0;     // Shipping per cubic foot
-const LOCAL_MARKUP = 0.05;          // Markup percentage
-const DUTY_RATE = 0.25;             // Duty rate
-const AA = 0.15;                    // Returns rate
-const AC = 0.25;                    // Ad spend rate
-const AD = 0.15;                    // Operating margin
+const USD_PER_INR = 85.0;           // Change exchange rate
+const SEND_RATE_PER_CFT = 7.0;      // Change shipping cost
+const LOCAL_MARKUP = 0.05;          // Change markup
+const DEFAULT_DUTY_RATE = 0.15;     // Change default duty
+
+const AA = 0.15;  // Returns
+const AC = 0.25;  // Ads
+const AD = 0.15;  // Operating margin
 ```
 
-After changes, redeploy:
-
+After changes:
 ```bash
-supabase functions deploy price-calculator
+supabase functions deploy price-calculator --project-ref YOUR_PROJECT_REF
+```
+
+### Update FBA Tier Structure
+
+Edit the `SHIPPING_TIERS` object in `index.ts`:
+```typescript
+const SHIPPING_TIERS: Record<number, [number, number, number]> = {
+  2: [7.46, 0.32, 3.0],    // [base, increment, cutoff]
+  3: [10.65, 0.38, 1.0],
+  // ...
+};
 ```
 
 ### Style Customization
 
-Edit the `<style>` section in `frontend/index.html` to change colors, fonts, layout, etc.
+Edit the `<style>` section in `index.html`:
+```css
+/* Change gradient colors */
+background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+/* Change button colors */
+button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+```
+
+## Security
+
+### CORS Configuration
+
+The function currently allows all origins:
+```typescript
+"Access-Control-Allow-Origin": "*"
+```
+
+**For production**, restrict to your domain:
+```typescript
+"Access-Control-Allow-Origin": "https://jay-trivedi.github.io"
+```
+
+### JWT Verification
+
+JWT verification is disabled in `config.toml`:
+```toml
+[function.price-calculator]
+verify_jwt = false
+```
+
+This allows public access without authentication. Enable if you need authentication.
+
+### Environment Variables
+
+The `.env` file contains sensitive data and is gitignored:
+```bash
+SUPABASE_DB_PASSWORD="..."
+```
+
+Never commit this file to version control.
 
 ## Troubleshooting
 
-### CORS Errors
+### Backend Issues
 
-If you see CORS errors in the browser console:
-- Verify the function URL is correct in `index.html`
-- Check that the Edge Function is deployed successfully
-- Ensure CORS headers are set in the Edge Function
+**401 Authorization Error:**
+- Ensure `verify_jwt = false` in `config.toml`
+- Redeploy with: `supabase functions deploy price-calculator --no-verify-jwt`
 
-### Function Not Found (404)
+**Function not found:**
+- Verify project reference: `supabase projects list`
+- Check deployment: `supabase functions list`
 
-- Verify your project reference ID is correct
-- Ensure the function was deployed successfully: `supabase functions list`
-- Check the function URL format: `https://PROJECT_REF.supabase.co/functions/v1/price-calculator`
+**Calculation errors:**
+- Test locally with `node test-calculation.js`
+- Check input validation in request
 
-### GitHub Pages Not Loading
+### Frontend Issues
 
-- Wait a few minutes after enabling Pages (it can take 5-10 minutes initially)
-- Check the Pages settings show "Your site is live at..."
-- Verify `index.html` is in the correct location (root or `/frontend` based on your settings)
+**CORS errors:**
+- Verify API_URL matches your Supabase project
+- Check CORS headers in Edge Function
+- Ensure function deployed successfully
+
+**GitHub Pages not updating:**
+- Wait 1-2 minutes for rebuild
+- Check Actions tab for deployment status
+- Verify `docs/index.html` is updated
+- Clear browser cache (Ctrl+Shift+R / Cmd+Shift+R)
+
+**Calculation not working:**
+- Open browser console (F12) for errors
+- Verify API URL is correct
+- Test backend directly with curl
+
+### Testing Deployment
+
+Check if frontend is live:
+```bash
+curl -s https://jay-trivedi.github.io/price-calculator/ | grep "fbaFeesValue"
+```
+
+Should return HTML containing `id="fbaFeesValue"` if deployed.
+
+## Development Workflow
+
+### Making Changes
+
+1. **Update Backend:**
+   ```bash
+   # Edit supabase/functions/price-calculator/index.ts
+   # Test locally
+   node test-calculation.js
+   # Deploy
+   supabase functions deploy price-calculator --project-ref YOUR_REF
+   ```
+
+2. **Update Frontend:**
+   ```bash
+   # Edit index.html
+   # Copy to docs
+   cp index.html docs/index.html
+   # Commit and push
+   git add index.html docs/index.html
+   git commit -m "Update: description"
+   git push origin main
+   ```
+
+3. **Verify Deployment:**
+   ```bash
+   # Test backend
+   curl -X POST "https://YOUR_REF.supabase.co/functions/v1/price-calculator" \
+     -H "Content-Type: application/json" \
+     -d '{"length_in":14,"breadth_in":14,"height_in":26,"weight_lb":11.9,"factory_inr":1250,"duty_rate_percent":15}'
+
+   # Check frontend (wait 1-2 min after push)
+   open https://jay-trivedi.github.io/price-calculator/
+   ```
+
+## Project History
+
+- **Initial version**: Basic price calculator with listing price only
+- **Current version**: Added FBA fees display as "Last Mile Shipping Fees"
+  - Backend returns both `theoretical_listing_price` and `fba_fees`
+  - Frontend displays both values below each other
+  - Added customizable duty rate input (default 15%)
+  - Updated test script to show both values
 
 ## License
 
 This project is provided as-is for your use.
 
-## Support
+## Support & Resources
 
-For Supabase-related issues, see the [Supabase Documentation](https://supabase.com/docs).
-
-For GitHub Pages issues, see the [GitHub Pages Documentation](https://docs.github.com/en/pages).
+- **Supabase Documentation**: https://supabase.com/docs
+- **GitHub Pages Documentation**: https://docs.github.com/en/pages
+- **Repository**: https://github.com/jay-trivedi/price-calculator
+- **Live Demo**: https://jay-trivedi.github.io/price-calculator/
