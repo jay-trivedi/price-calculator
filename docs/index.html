@@ -49,7 +49,7 @@
             font-size: 0.95rem;
         }
 
-        input, textarea {
+        input, textarea, select {
             width: 100%;
             padding: 12px 16px;
             border: 2px solid #e1e1e1;
@@ -59,7 +59,12 @@
             font-family: inherit;
         }
 
-        input:focus, textarea:focus {
+        select {
+            cursor: pointer;
+            background-color: white;
+        }
+
+        input:focus, textarea:focus, select:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
@@ -169,6 +174,19 @@
 
         .paste-section label {
             color: #667eea;
+            font-weight: 600;
+        }
+
+        .sku-section {
+            background: linear-gradient(135deg, #fef3e8 0%, #fde8d4 100%);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            border: 2px dashed #f59e0b;
+        }
+
+        .sku-section label {
+            color: #f59e0b;
             font-weight: 600;
         }
 
@@ -303,6 +321,36 @@
 <body>
     <div class="container">
         <h1>Price Calculator</h1>
+
+        <div class="sku-section">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="skuSelect">Quick Select Product SKU</label>
+                <select id="skuSelect">
+                    <option value="">-- Select a SKU --</option>
+                    <option value="DR001MW">DR001MW</option>
+                    <option value="DR002MTMW">DR002MTMW</option>
+                    <option value="DR003MW">DR003MW</option>
+                    <option value="DR005MW">DR005MW</option>
+                    <option value="DR004MB">DR004MB</option>
+                    <option value="ET003-N">ET003-N</option>
+                    <option value="ET006">ET006</option>
+                    <option value="ET003-W">ET003-W</option>
+                    <option value="ET004">ET004</option>
+                    <option value="ET005MR">ET005MR</option>
+                    <option value="ET008">ET008</option>
+                    <option value="ET009">ET009</option>
+                    <option value="ET012">ET012</option>
+                    <option value="ET042MB(D)">ET042MB(D)</option>
+                    <option value="ET043MTMS">ET043MTMS</option>
+                    <option value="DR003MWW(D)">DR003MWW(D)</option>
+                    <option value="ET042MW">ET042MW</option>
+                    <option value="ET013">ET013</option>
+                </select>
+                <div class="input-hint">Select a product to auto-fill dimensions and weight</div>
+            </div>
+        </div>
+
+        <div class="divider"><span>or</span></div>
 
         <div class="paste-section">
             <div class="form-group" style="margin-bottom: 0;">
@@ -453,6 +501,59 @@
         const weightInput = document.getElementById('weight');
         const factoryPriceInput = document.getElementById('factory_price');
         const dutyRateInput = document.getElementById('duty_rate');
+        const skuSelect = document.getElementById('skuSelect');
+
+        // SKU Data
+        const SKU_DATA = {
+            'DR001MW': { length: 14.0, breadth: 14.0, height: 26.0, weight: 11.9 },
+            'DR002MTMW': { length: 14.5, breadth: 14.5, height: 26.5, weight: 19.0 },
+            'DR003MW': { length: 14.5, breadth: 15.0, height: 5.5, weight: 7.7 },
+            'DR005MW': { length: 14.5, breadth: 15.0, height: 6.5, weight: 8.8 },
+            'DR004MB': { length: 14.5, breadth: 14.5, height: 7.5, weight: 10.4 },
+            'ET003-N': { length: 17.5, breadth: 19.5, height: 14.5, weight: 21.6 },
+            'ET006': { length: 19.0, breadth: 19.0, height: 24.0, weight: 38.8 },
+            'ET003-W': { length: 17.5, breadth: 19.5, height: 14.5, weight: 21.6 },
+            'ET004': { length: 19.0, breadth: 19.0, height: 23.0, weight: null },
+            'ET005MR': { length: 20.5, breadth: 20.0, height: 23.0, weight: 34.6 },
+            'ET008': { length: 23.0, breadth: 15.0, height: 23.0, weight: 33.3 },
+            'ET009': { length: 16.0, breadth: 14.0, height: 22.0, weight: 21.2 },
+            'ET012': { length: 20.0, breadth: 24.0, height: 11.5, weight: 21.2 },
+            'ET042MB(D)': { length: 23.0, breadth: 6.0, height: 18.0, weight: 14.1 },
+            'ET043MTMS': { length: 26.0, breadth: 18.0, height: 5.5, weight: 20.3 },
+            'DR003MWW(D)': { length: 14.5, breadth: 15.0, height: 5.5, weight: 7.7 },
+            'ET042MW': { length: 23.0, breadth: 6.0, height: 18.0, weight: 14.1 },
+            'ET013': { length: 21.0, breadth: 21.0, height: 25.0, weight: 64.3 }
+        };
+
+        // Handle SKU selection
+        skuSelect.addEventListener('change', (e) => {
+            const sku = e.target.value;
+            if (!sku) return;
+
+            const data = SKU_DATA[sku];
+            if (data) {
+                lengthInput.value = data.length;
+                breadthInput.value = data.breadth;
+                heightInput.value = data.height;
+                if (data.weight !== null) {
+                    weightInput.value = data.weight;
+                } else {
+                    weightInput.value = '';
+                }
+
+                // Visual feedback
+                [lengthInput, breadthInput, heightInput, weightInput].forEach(input => {
+                    if (input.value) {
+                        input.classList.add('success-flash');
+                        setTimeout(() => input.classList.remove('success-flash'), 500);
+                    }
+                });
+
+                // Reset results
+                resultDiv.classList.remove('show');
+                errorDiv.classList.remove('show');
+            }
+        });
 
         // Handle paste from Excel
         pasteInput.addEventListener('input', (e) => {
