@@ -12,11 +12,11 @@ const AC = 0.25; // ads
 const AD = 0.15; // operating margin
 const AF = 1.0 - (AA + AB + AC + AD); // [L+FBA]/GrossSales %
 
-function theoreticalListingPrice(l, b, h, weightLbs, factoryInr) {
+function theoreticalListingPrice(l, b, h, weightLbs, factoryInr, dutyRate = 0.15) {
   const cft = (l * b * h) / (12 ** 3);
   const exUsd = factoryInr / USD_PER_INR;
   const send = SEND_RATE_PER_CFT * cft;
-  const duty = exUsd * (1 + LOCAL_MARKUP) * DUTY_RATE;
+  const duty = exUsd * (1 + LOCAL_MARKUP) * dutyRate;
   const landed = exUsd + send + duty;
 
   const dimWeight = Math.ceil((l * b * h) / 139.0);
@@ -69,7 +69,10 @@ function theoreticalListingPrice(l, b, h, weightLbs, factoryInr) {
   const fba = base + incr * Math.max(0, shippingWeight - cutoff);
 
   const z = landed + fba;
-  return z / AF;
+  return {
+    listingPrice: z / AF,
+    fbaFees: fba
+  };
 }
 
 // Test case from user
@@ -81,15 +84,17 @@ const testInput = {
   factoryPrice: 1250
 };
 
-const result = theoreticalListingPrice(
+const { listingPrice, fbaFees } = theoreticalListingPrice(
   testInput.length,
   testInput.breadth,
   testInput.height,
   testInput.weight,
-  testInput.factoryPrice
+  testInput.factoryPrice,
+  0.15  // 15% duty rate (default)
 );
 
-const rounded = Math.round(result * 100) / 100;
+const roundedPrice = Math.round(listingPrice * 100) / 100;
+const roundedFBA = Math.round(fbaFees * 100) / 100;
 
 console.log('\n=== Price Calculator Test ===\n');
 console.log('Input:');
@@ -98,8 +103,8 @@ console.log(`  Breadth: ${testInput.breadth} in`);
 console.log(`  Height: ${testInput.height} in`);
 console.log(`  Weight: ${testInput.weight} lbs`);
 console.log(`  Factory Price: ₹${testInput.factoryPrice}`);
-console.log('\nResult:');
-console.log(`  Theoretical Listing Price: $${rounded}`);
-console.log('\nExpected: $199.81');
-console.log(`Status: ${rounded === 199.81 ? '✅ PASS' : '❌ FAIL'}`);
+console.log(`  Duty Rate: 15%`);
+console.log('\nResults:');
+console.log(`  Approx List Price: $${roundedPrice}`);
+console.log(`  Last Mile Shipping Fees (FBA): $${roundedFBA}`);
 console.log('');

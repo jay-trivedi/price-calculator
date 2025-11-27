@@ -22,6 +22,7 @@ type PriceInput = {
 
 type PriceOutput = {
   theoretical_listing_price: number;
+  fba_fees: number;
 };
 
 function theoreticalListingPrice(
@@ -31,7 +32,7 @@ function theoreticalListingPrice(
   weightLbs: number,
   factoryInr: number,
   dutyRate: number = DEFAULT_DUTY_RATE
-): number {
+): { listingPrice: number; fbaFees: number } {
   const cft = (l * b * h) / (12 ** 3);
   const exUsd = factoryInr / USD_PER_INR;
   const send = SEND_RATE_PER_CFT * cft;
@@ -88,7 +89,10 @@ function theoreticalListingPrice(
   const fba = base + incr * Math.max(0, shippingWeight - cutoff);
 
   const z = landed + fba;
-  return z / AF;
+  return {
+    listingPrice: z / AF,
+    fbaFees: fba
+  };
 }
 
 serve(async (req: Request): Promise<Response> => {
@@ -121,7 +125,7 @@ serve(async (req: Request): Promise<Response> => {
       ? Number(body.duty_rate_percent) / 100
       : DEFAULT_DUTY_RATE;
 
-    const listing = theoreticalListingPrice(
+    const { listingPrice, fbaFees } = theoreticalListingPrice(
       Number(body.length_in),
       Number(body.breadth_in),
       Number(body.height_in),
@@ -131,7 +135,8 @@ serve(async (req: Request): Promise<Response> => {
     );
 
     const result: PriceOutput = {
-      theoretical_listing_price: Math.round(listing * 100) / 100,
+      theoretical_listing_price: Math.round(listingPrice * 100) / 100,
+      fba_fees: Math.round(fbaFees * 100) / 100,
     };
 
     return new Response(JSON.stringify(result), {
